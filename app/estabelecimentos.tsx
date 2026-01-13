@@ -1,10 +1,12 @@
 import axios from 'axios';
+import { BlurView } from 'expo-blur';
+import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, StyleSheet, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -16,15 +18,39 @@ interface Estabelecimento {
   imagem_url?: string;
   imagem?: string;
   avaliacao_media?: number;
+  galeria?: string[];
+  distancia?: number;
 }
 
+const darkenColor = (hex: string, factor: number = 0.2) => {
+  if (!hex) return '#242426';
+  
+  hex = hex.replace(/^#/, '');
+  if (hex.length === 3) {
+    hex = hex.split('').map(c => c + c).join('');
+  }
+  
+  const num = parseInt(hex, 16);
+  const r = Math.floor(((num >> 16) & 0xF8) * factor);
+  const g = Math.floor(((num >> 8) & 0xF9) * factor);
+  const b = Math.floor((num & 0xFA) * factor);
+
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+};
+
 export default function EstabelecimentosScreen() {
-  const { id, nomeCategoria } = useLocalSearchParams();
+  const { id, nomeCategoria, corProfundo, corPastel, corVivido } = useLocalSearchParams();
   const [estabelecimentos, setEstabelecimentos] = useState<Estabelecimento[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const colorScheme = useColorScheme();
   const theme = colorScheme ?? 'light';
+  const { width } = useWindowDimensions();
+  const CARD_WIDTH = width - 40; // Subtrai o padding horizontal da lista (20 + 20)
+
+  const themeProfundo = typeof corProfundo === 'string' ? corProfundo : '#444';
+  const themeVivido = typeof corVivido === 'string' ? corVivido : '#000';
+  const themePastel = typeof corPastel === 'string' ? corPastel : '#8E44AD';
 
   useEffect(() => {
     if (id) {
@@ -34,7 +60,21 @@ export default function EstabelecimentosScreen() {
 
   const fetchEstabelecimentos = async () => {
     try {
-      const response = await axios.get(`https://ninfa-postlegal-bodhi.ngrok-free.dev/api/categorias-servico/${id}/estabelecimentos`);
+      let latitude;
+      let longitude;
+
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      
+      if (status === 'granted') {
+        const location = await Location.getCurrentPositionAsync({});
+        latitude = location.coords.latitude;
+        longitude = location.coords.longitude;
+      }
+
+      const response = await axios.post(`https://ninfa-postlegal-bodhi.ngrok-free.dev/api/categorias-servico/${id}/estabelecimentos`, {
+        latitude,
+        longitude
+      });
       // Ajuste aqui se a resposta vier dentro de um objeto 'data' (ex: response.data.data)
       setEstabelecimentos(response.data.data || response.data);
     } catch (error) {
@@ -44,50 +84,90 @@ export default function EstabelecimentosScreen() {
     }
   };
 
-  const renderItem = ({ item }: { item: Estabelecimento }) => (
-    <TouchableOpacity
-      style={styles.itemContainer}
-      onPress={() => {
-        router.push({
-          pathname: '/servicos',
-          params: { id: item.id, nomeEstabelecimento: item.nome }
-        });
-      }}
-    >
-      <Image
-        source={item.imagem ? { uri: item.imagem } : require('@/assets/images/placeholder.png')}
-        style={styles.itemImage}
-      />
-      <View style={styles.itemContent}>
-        <View style={styles.headerRow}>
-          <ThemedText style={styles.itemName}>{item.nome}</ThemedText>
-          {item.avaliacao_media != null && (
-            <ThemedText style={styles.rating}>★ {Number(item.avaliacao_media).toFixed(1)}</ThemedText>
-          )}
-        </View>
-        {item.descricao && (
-          <ThemedText style={styles.description} numberOfLines={2}>
-            {item.descricao}
-          </ThemedText>
-        )}
-        {item.endereco && (
-          <ThemedText style={styles.address}>{item.endereco}</ThemedText>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
+  const renderItem = ({ item }: { item: Estabelecimento }) => {
 
-  const renderSeparator = () => (
-    <View
+    const handlePress = () => {
+      router.push({
+        pathname: '/servicos',
+        params: { 
+          id: item.id, 
+          nomeEstabelecimento: item.nome,
+          corProfundo: themeProfundo,
+          corPastel: themePastel,
+          corVivido: themeVivido
+        }
+      });
+    };
+
+    return (
+      <View
       style={[
-        styles.separator,
-        { backgroundColor: theme === 'dark' ? '#333333' : '#E0E0E0' }
+        styles.card,
+        {
+          backgroundColor: 'transparent',
+          borderColor: themeProfundo,
+          shadowColor: themeVivido,
+        }
       ]}
-    />
-  );
+    >
+      <View style={styles.cardInner}>
+        <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: darkenColor(themeProfundo, 0.3) + '88' }]} />
+
+        {item.galeria && item.galeria.length > 0 ? (
+          <View style={styles.galleryContainer}>
+            <FlatList
+              data={item.galeria}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={true}
+              keyExtractor={(_, index) => index.toString()}
+              renderItem={({ item: img }) => (
+                <TouchableOpacity activeOpacity={0.9} onPress={handlePress}>
+                  <Image
+                    source={{ uri: `https://ninfa-postlegal-bodhi.ngrok-free.dev/storage/fotos/${img.foto}` }}
+                    style={[styles.galleryImage, { width: CARD_WIDTH }]}
+                    onError={(e) => console.log(`[ERRO] Falha ao carregar imagem:`, e.nativeEvent.error)}
+                  />
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        ) : null}
+        <TouchableOpacity style={styles.cardBody} onPress={handlePress} activeOpacity={0.7}>
+          <Image
+            source={item.imagem ? { uri: `https://ninfa-postlegal-bodhi.ngrok-free.dev/storage/logos/${item.imagem}` } : require('@/assets/images/placeholder.png')}
+            style={styles.cardLogo}
+          />
+          <View style={styles.cardContent}>
+            <View style={styles.headerRow}>
+              <ThemedText style={styles.cardTitle}>{item.nome}</ThemedText>
+              <View style={styles.metaInfo}>
+                {item.distancia != null && (
+                  <ThemedText style={[styles.distance, { color: themePastel }]}>{Number(item.distancia).toFixed(1)} km</ThemedText>
+                )}
+                {item.avaliacao_media != null && (
+                  <ThemedText style={[styles.rating, { color: themePastel }]}>★ {Number(item.avaliacao_media).toFixed(1)}</ThemedText>
+                )}
+              </View>
+            </View>
+            {!!item.descricao && (
+              <ThemedText style={styles.cardDescription} numberOfLines={2}>
+                {item.descricao}
+              </ThemedText>
+            )}
+            {!!item.endereco && (
+              <ThemedText style={styles.cardAddress}>{item.endereco}</ThemedText>
+            )}
+          </View>
+        </TouchableOpacity>
+      </View>
+    </View>
+    );
+  };
 
   return (
-    <ThemedView style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ThemedText type="link">Voltar</ThemedText>
@@ -106,7 +186,6 @@ export default function EstabelecimentosScreen() {
           data={estabelecimentos}
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderItem}
-          ItemSeparatorComponent={renderSeparator}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             <ThemedText style={styles.emptyText}>
@@ -115,18 +194,18 @@ export default function EstabelecimentosScreen() {
           }
         />
       )}
-    </ThemedView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#252525',
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
+    paddingBottom: 10,
   },
   backButton: {
     marginBottom: 10,
@@ -134,22 +213,40 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
+    color: '#F8F9FA',
   },
   listContent: {
     padding: 20,
+    gap: 16,
   },
-  itemContainer: {
-    paddingVertical: 12,
+  card: {
+    backgroundColor: '#2E2E30',
+    borderRadius: 16,
+    padding: 0,
+    borderWidth: 1,
+    borderColor: '#444',
+    flexDirection: 'column',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    elevation: 50,
+  },
+  cardInner: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  cardBody: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    padding: 16,
   },
-  itemImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
+  cardLogo: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     marginRight: 12,
   },
-  itemContent: {
+  cardContent: {
     gap: 4,
     flex: 1,
   },
@@ -158,26 +255,44 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  itemName: {
+  cardTitle: {
     fontSize: 16,
     fontWeight: '600',
+    color: '#F8F9FA',
+  },
+  metaInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  distance: {
+    fontSize: 12,
+    fontWeight: '600',
+    paddingEnd: 4
   },
   rating: {
     fontSize: 14,
     color: '#8E44AD',
     fontWeight: 'bold',
   },
-  description: {
+  cardDescription: {
     fontSize: 13,
-    opacity: 0.7,
+    color: '#CCCCCC',
   },
-  address: {
+  cardAddress: {
     fontSize: 11,
-    opacity: 0.5,
+    color: '#AAAAAA',
   },
-  separator: {
-    height: 1,
+  galleryContainer: {
+    height: 200,
     width: '100%',
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    zIndex: 10,
+  },
+  galleryImage: {
+    height: 200,
+    resizeMode: 'cover',
+    backgroundColor: '#333',
   },
   loadingContainer: {
     flex: 1,

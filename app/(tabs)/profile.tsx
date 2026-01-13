@@ -1,40 +1,33 @@
 import { Link } from 'expo-router';
-import { StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 
 export default function TabTwoScreen() {
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Perfil</ThemedText>
-      </ThemedView>
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <ThemedView style={[styles.titleContainer, { backgroundColor: 'transparent' }]}>
+          <ThemedText type="title">Perfil</ThemedText>
+        </ThemedView>
 
-      <Link href="/login" style={styles.link}>
-        <ThemedText type="link">Ir para a tela de Login</ThemedText>
-      </Link>
-    </ParallaxScrollView>
+        <Link href="/login" style={styles.link}>
+          <ThemedText type="link">Ir para a tela de Login</ThemedText>
+        </Link>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
+  container: {
+    flex: 1,
+    backgroundColor: '#252525',
+  },
+  content: {
+    padding: 16,
   },
   titleContainer: {
     flexDirection: 'row',
