@@ -3,7 +3,7 @@ import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, StyleSheet, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, Platform, StyleSheet, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -18,7 +18,7 @@ interface Estabelecimento {
   imagem_url?: string;
   imagem?: string;
   avaliacao_media?: number;
-  galeria?: string[];
+  galeria?: { foto: string }[];
   distancia?: number;
 }
 
@@ -110,9 +110,11 @@ export default function EstabelecimentosScreen() {
         }
       ]}
     >
-      <View style={styles.cardInner}>
-        <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: darkenColor(themeProfundo, 0.3) + '88' }]} />
+      <View style={[styles.cardInner, { backgroundColor: 'transparent' }]}>
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <BlurView intensity={Platform.OS === 'android' ? 50 : 30} tint="dark" style={StyleSheet.absoluteFill} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: darkenColor(themeProfundo, 0.3) + '88' }]} />
+        </View>
 
         {item.galeria && item.galeria.length > 0 ? (
           <View style={styles.galleryContainer}>
@@ -134,7 +136,7 @@ export default function EstabelecimentosScreen() {
             />
           </View>
         ) : null}
-        <TouchableOpacity style={styles.cardBody} onPress={handlePress} activeOpacity={0.7}>
+        <TouchableOpacity style={[styles.cardBody, { zIndex: 1 }]} onPress={handlePress} activeOpacity={0.7}>
           <Image
             source={item.imagem ? { uri: `https://ninfa-postlegal-bodhi.ngrok-free.dev/storage/logos/${item.imagem}` } : require('@/assets/images/placeholder.png')}
             style={styles.cardLogo}
@@ -169,8 +171,8 @@ export default function EstabelecimentosScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ThemedText type="link">Voltar</ThemedText>
+        <TouchableOpacity onPress={() => router.back()} style={[styles.backButton, { backgroundColor: themePastel }]}>
+          <ThemedText style={{ color: '#252525', fontWeight: '600' }}>Voltar</ThemedText>
         </TouchableOpacity>
         <ThemedText type="title" style={styles.title}>
           {nomeCategoria ? String(nomeCategoria) : 'Estabelecimentos'}
@@ -210,6 +212,9 @@ const styles = StyleSheet.create({
   backButton: {
     marginBottom: 10,
     alignSelf: 'flex-start',
+    borderRadius: 32,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
   },
   title: {
     fontSize: 28,

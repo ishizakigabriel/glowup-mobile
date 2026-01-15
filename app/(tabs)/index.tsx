@@ -5,7 +5,7 @@ import axios from 'axios';
 import { BlurView } from 'expo-blur';
 import { Link } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface Categoria {
@@ -92,9 +92,11 @@ export default function HomeScreen() {
                       }
                     ]}
                 >
-                    <View style={styles.cardInner}>
-                      <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
-                      <View style={[StyleSheet.absoluteFill, { backgroundColor: darkenColor(item.cor_profundo, 0.3) + '88' }]} />
+                    <View style={[styles.cardInner, { backgroundColor: 'transparent' }]}>
+                      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                        <BlurView intensity={Platform.OS === 'android' ? 50 : 30} tint="dark" style={StyleSheet.absoluteFill} />
+                        <View style={[StyleSheet.absoluteFill, { backgroundColor: darkenColor(item.cor_profundo, 0.3) + '88' }]} />
+                      </View>
                       
                       <View style={styles.cardContent}>
                         <View style={styles.iconContainer}>

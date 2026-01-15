@@ -1,12 +1,14 @@
+import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import axios from 'axios';
 import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, LayoutAnimation, Platform, StyleSheet, TouchableOpacity, UIManager, View, useWindowDimensions } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Image, LayoutAnimation, Linking, Platform, StyleSheet, TouchableOpacity, UIManager, View, useWindowDimensions } from 'react-native';
+import { TouchableOpacity as GHTouchableOpacity, FlatList } from 'react-native-gesture-handler';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 
 interface Servico {
   id: number;
@@ -15,6 +17,15 @@ interface Servico {
   preco: number | string;
   descricao?: string;
   imagem?: string;
+  colaboradores_capacitados?: Colaborador[];
+}
+
+interface Colaborador {
+  id: number;
+  nome: string;
+  foto?: string;
+  link_portfolio?: string | null;
+  especialidades?: string;
 }
 
 interface Estabelecimento {
@@ -61,6 +72,9 @@ export default function ServicosScreen() {
   const [estabelecimento, setEstabelecimento] = useState<Estabelecimento | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
+  const bottomSheetRef = useRef<BottomSheet>(null);
+  const [selectedService, setSelectedService] = useState<Servico | null>(null);
+  const snapPoints = useMemo(() => ['50%', '85%'], []);
   const router = useRouter();
   const { width } = useWindowDimensions();
   const CARD_WIDTH = width - 40;
@@ -110,6 +124,54 @@ export default function ServicosScreen() {
     setExpanded(!expanded);
   };
 
+  const handleOpenService = (service: Servico) => {
+    setSelectedService(service);
+    bottomSheetRef.current?.expand();
+  };
+
+  const handleSchedule = (colaboradorId: number | null) => {
+    if (!selectedService || !estabelecimento) return;
+
+    const profissionalNome = colaboradorId 
+      ? selectedService.colaboradores_capacitados?.find(c => c.id === colaboradorId)?.nome 
+      : 'Qualquer Profissional';
+
+    router.push({
+      pathname: '/agendamento',
+      params: {
+        estabelecimentoId: estabelecimento.id,
+        servicoId: selectedService.id,
+        colaboradorId: colaboradorId || '', // Passa vazio se for nulo para evitar erro de serialização
+        nomeServico: selectedService.nome,
+        precoServico: formatPrice(selectedService.preco),
+        nomeEstabelecimento: estabelecimento.nome,
+        nomeColaborador: colaboradorId ? profissionalNome : '',
+        corProfundo: corProfundo as string,
+        corPastel: corPastel as string,
+        corVivido: corVivido as string,
+      }
+    });
+    
+    // Fecha o bottom sheet após navegar
+    bottomSheetRef.current?.close();
+  };
+
+  const openPortfolio = (url: string) => {
+    Linking.openURL(url).catch(err => console.error("Couldn't load page", err));
+  };
+
+  const renderBackdrop = useCallback(
+    (props: any) => (
+      <BottomSheetBackdrop
+        {...props}
+        disappearsOnIndex={-1}
+        appearsOnIndex={0}
+        opacity={0.7}
+      />
+    ),
+    []
+  );
+
   const renderHeader = () => {
     if (!estabelecimento) return null;
 
@@ -132,10 +194,10 @@ export default function ServicosScreen() {
         ]}
       >
         <View style={[styles.cardInner, { borderColor: themeProfundo }]}>
-          <View style={styles.glassBackground}>
-              <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
-              <View style={[StyleSheet.absoluteFill, { backgroundColor: darkenColor(themeProfundo, 0.3) + '88' }]} />
-          </View>
+            <View style={styles.glassBackground} pointerEvents="none">
+                <BlurView intensity={Platform.OS === 'android' ? 80 : 50} tint="dark" style={StyleSheet.absoluteFill} />
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: darkenColor(themeProfundo, 0.3) + '88' }]} />
+            </View>
 
           {estabelecimento.galeria && estabelecimento.galeria.length > 0 ? (
             <View style={styles.galleryContainer}>
@@ -145,6 +207,7 @@ export default function ServicosScreen() {
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
                 keyExtractor={(_, index) => index.toString()}
+                nestedScrollEnabled={true}
                 renderItem={({ item: img }) => (
                   <Image
                     source={{ uri: `https://ninfa-postlegal-bodhi.ngrok-free.dev/storage/fotos/${img.foto}` }}
@@ -154,8 +217,10 @@ export default function ServicosScreen() {
               />
             </View>
           ) : null}
-
-          <TouchableOpacity activeOpacity={0.9} onPress={toggleExpand}>
+          <GHTouchableOpacity 
+            onPress={toggleExpand} 
+            activeOpacity={0.9}
+          >
           <View style={styles.cardContent}>
             <View style={styles.estabHeaderRow}>
           <Image
@@ -204,7 +269,7 @@ export default function ServicosScreen() {
               <ThemedText style={[styles.expandText, { color: themePastel }]}>{expanded ? 'Ver menos ▲' : 'Ver mais ▼'}</ThemedText>
             </View>
           </View>
-          </TouchableOpacity>
+          </GHTouchableOpacity>
         </View>
       </View>
     );
@@ -221,13 +286,15 @@ export default function ServicosScreen() {
         isLast && styles.itemLast,
       ]}>
         <View style={[styles.itemInner, isFirst && styles.itemFirst, isLast && styles.itemLast]}>
-          {/* Fundo Glass para cada item, criando o efeito de lista única */}
-          <View style={StyleSheet.absoluteFill}>
-              <BlurView intensity={20} tint="light" style={StyleSheet.absoluteFill} />
-              <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(248, 249, 250, 0.05)' }]} />
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              <BlurView intensity={Platform.OS === 'android' ? 50 : 20} tint="light" style={StyleSheet.absoluteFill} />
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: Platform.OS === 'ios' ? 'rgba(248, 249, 250, 0.05)' : 'rgba(60, 60, 60, 0.4)' }]} />
           </View>
-
-          <View style={styles.itemContainer}>
+          <GHTouchableOpacity 
+            style={styles.itemContainer}
+            onPress={() => handleOpenService(item)}
+            activeOpacity={0.7}
+          >
             <View style={styles.serviceContentRow}>
               {!!item.imagem && (
                 <Image
@@ -248,13 +315,13 @@ export default function ServicosScreen() {
           )}
 
           <View style={styles.footerContent}>
-            <ThemedText style={styles.time}>
+            <ThemedText style={[styles.time, { color: themePastel }]}>
               {item.tempo_medio_duracao} minutos
             </ThemedText>
           </View>
               </View>
             </View>
-        </View>
+        </GHTouchableOpacity>
           {!isLast && <View style={styles.separator} />}
         </View>
       </View>
@@ -262,11 +329,11 @@ export default function ServicosScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ThemedText type="link">Voltar</ThemedText>
-        </TouchableOpacity>
+        <GHTouchableOpacity onPress={() => router.back()} style={[styles.backButton, { backgroundColor: themePastel }]}>
+          <ThemedText style={{ color: '#252525', fontWeight: '600' }}>Voltar</ThemedText>
+        </GHTouchableOpacity>
       </View>
 
       {loading ? (
@@ -287,28 +354,212 @@ export default function ServicosScreen() {
           }
         />
       )}
-    </ThemedView>
+
+      <BottomSheet
+        ref={bottomSheetRef}
+        index={-1}
+        snapPoints={snapPoints}
+        enablePanDownToClose
+        backdropComponent={renderBackdrop}
+        backgroundStyle={{ backgroundColor: '#2E2E30' }}
+        handleIndicatorStyle={{ backgroundColor: '#ccc' }}
+      >
+        <BottomSheetScrollView style={styles.contentContainer} contentContainerStyle={{ paddingBottom: 40 }}>
+          {selectedService && (
+            <View style={styles.sheetContent}>
+              <ThemedText type="title" style={styles.sheetTitle}>Quem fará o serviço?</ThemedText>
+              <ThemedText style={styles.sheetSubtitle}>{selectedService.nome} • {formatPrice(selectedService.preco)}</ThemedText>
+              
+              <View style={styles.sheetDivider} />
+
+              {/* Opção Automática */}
+              <GHTouchableOpacity 
+                style={[styles.colaboradorCard, { borderColor: themePastel }]} 
+                onPress={() => handleSchedule(null)}
+              >
+                <View style={[styles.colaboradorAvatar, { backgroundColor: themePastel, justifyContent: 'center', alignItems: 'center' }]}>
+                  <ThemedText style={{ fontSize: 20 }}>✨</ThemedText>
+                </View>
+                <View style={styles.colaboradorInfo}>
+                  <ThemedText style={styles.colaboradorName}>Escolher Automaticamente</ThemedText>
+                  <ThemedText style={styles.colaboradorRole}>O sistema escolhe o melhor horário</ThemedText>
+                </View>
+                <View style={styles.arrowContainer}>
+                   <ThemedText style={{ color: themePastel, fontSize: 20 }}>→</ThemedText>
+                </View>
+              </GHTouchableOpacity>
+
+              <ThemedText style={styles.sectionLabel}>Profissionais Disponíveis</ThemedText>
+
+              {/* Lista de Colaboradores */}
+              {(selectedService.colaboradores_capacitados || []).map((colaborador) => (
+                <View key={colaborador.id} style={styles.colaboradorItem}>
+                  <View style={styles.colaboradorRow}>
+                    <Image source={colaborador.foto ? { uri: `https://ninfa-postlegal-bodhi.ngrok-free.dev/storage/colaboradores/${colaborador.foto}` } : require('@/assets/images/placeholder.png')} style={styles.colaboradorAvatar} />
+                    <View style={styles.colaboradorInfo}>
+                      <ThemedText style={styles.colaboradorName}>{colaborador.nome}</ThemedText>
+                      <ThemedText style={styles.colaboradorRole}>{colaborador.especialidades || 'Especialista'}</ThemedText>
+                      <View style={styles.actionButtons}>
+                        {colaborador.link_portfolio && (
+                          <GHTouchableOpacity 
+                            style={styles.portfolioButton} 
+                            onPress={() => openPortfolio(colaborador.link_portfolio!)}
+                          >
+                            <ThemedText style={styles.portfolioText}>Ver Portfólio</ThemedText>
+                          </GHTouchableOpacity>
+                        )}
+                        <GHTouchableOpacity 
+                          style={[styles.scheduleButton, { backgroundColor: themePastel}]}
+                          onPress={() => handleSchedule(colaborador.id)}
+                        >
+                          <ThemedText style={styles.scheduleText}>Agendar</ThemedText>
+                        </GHTouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </BottomSheetScrollView>
+      </BottomSheet>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
+  container: {
     flex: 1,
-    backgroundColor: '#252525', // Grafite Carbono
+    backgroundColor: '#252525',
   },
-  header: { paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20 },
-  backButton: { marginBottom: 10, alignSelf: 'flex-start' },
-  title: { fontSize: 28 },
-  listContent: { padding: 20 },
-  
-  // Estilos dos Itens da Lista (Glasslist)
-  itemShadowWrapper: {
-    // Sombra removida conforme solicitado
+  header: {
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    paddingTop: 10,
+  },
+  backButton: {
+    marginBottom: 10,
+    alignSelf: 'flex-start',
+    borderRadius: 32,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  listContent: {
+    paddingBottom: 100,
+    paddingHorizontal: 20,
+  },
+  emptyText: {
+    textAlign: 'center',
+    marginTop: 40,
+    opacity: 0.5,
+    color: '#fff',
+  },
+  headerCard: {
+    marginBottom: 24,
+    borderRadius: 16,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
     backgroundColor: 'transparent',
+  },
+  cardInner: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  glassBackground: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  galleryContainer: {
+    height: 200,
+    width: '100%',
+  },
+  galleryImage: {
+    height: 200,
+    resizeMode: 'cover',
+  },
+  cardContent: {
+    padding: 16,
+  },
+  estabHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  estabImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 12,
+    backgroundColor: '#333',
+  },
+  estabInfo: {
+    flex: 1,
+  },
+  nameRatingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  estabName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    flex: 1,
+  },
+  rating: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  estabAddress: {
+    fontSize: 12,
+    color: '#ccc',
+  },
+  expandedContent: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+  },
+  infoSection: {
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  contactText: {
+    fontSize: 14,
+    color: '#ddd',
+  },
+  estabDescription: {
+    fontSize: 14,
+    color: '#ddd',
+    lineHeight: 20,
+  },
+  expandIconContainer: {
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  expandText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  itemShadowWrapper: {
+    marginBottom: 0,
   },
   itemInner: {
-    overflow: 'hidden',
     backgroundColor: 'transparent',
+    overflow: 'hidden',
   },
   itemFirst: {
     borderTopLeftRadius: 16,
@@ -317,135 +568,203 @@ const styles = StyleSheet.create({
   itemLast: {
     borderBottomLeftRadius: 16,
     borderBottomRightRadius: 16,
+    marginBottom: 20,
   },
   itemContainer: {
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+    padding: 16,
   },
-  separator: { height: 1, width: '100%', backgroundColor: 'rgba(248, 249, 250, 0.05)' },
-  
-  headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   serviceContentRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
   },
   serviceImage: {
-    width: 70,
-    height: 70,
+    width: 80,
+    height: 80,
     borderRadius: 8,
     marginRight: 12,
     backgroundColor: '#333',
   },
-  serviceTextContainer: { flex: 1 },
-  serviceName: { flex: 1, marginRight: 10, color: '#F8F9FA' },
-  price: { fontWeight: 'bold', fontSize: 16, color: '#A8E6CF' }, // Verde Pastel
-  description: { fontSize: 14, opacity: 0.7, color: '#F8F9FA' },
-  footerContent: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-  time: { fontSize: 12, opacity: 0.6, color: '#F8F9FA' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyText: { textAlign: 'center', marginTop: 40, opacity: 0.5 },
-  headerCard: {
-    borderRadius: 12,
-    marginBottom: 24,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 10,
-    elevation: 10,
-    backgroundColor: 'transparent',
-  },
-  cardInner: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-  },
-  cardContent: {
-    padding: 16,
-  },
-  glassBackground: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  estabHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  estabImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    marginRight: 16,
-  },
-  estabInfo: {
+  serviceTextContainer: {
     flex: 1,
-    gap: 4,
+    justifyContent: 'space-between',
   },
-  estabName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    flex: 1,
-    marginRight: 8,
-    color: '#F8F9FA',
-  },
-  nameRatingRow: {
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-  },
-  rating: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginTop: 2,
-  },
-  estabAddress: {
-    fontSize: 14,
-    opacity: 0.7,
-    color: '#F8F9FA',
-  },
-  contactText: {
-    fontSize: 14,
-    opacity: 0.8,
-    marginBottom: 2,
-    color: '#F8F9FA',
-  },
-  estabDescription: {
-    fontSize: 14,
-    opacity: 0.5,
-    marginTop: 4,
-    color: '#F8F9FA',
-  },
-  expandedContent: {
-    marginTop: 12,
-    borderTopWidth: 1,
-    paddingTop: 12,
-    gap: 12,
-  },
-  infoSection: {
-    gap: 4,
-  },
-  sectionTitle: {
-    fontSize: 14,
     marginBottom: 4,
-    color: '#F8F9FA',
   },
-  expandIconContainer: {
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  expandText: {
-    fontSize: 12,
-    opacity: 0.6,
+  serviceName: {
+    fontSize: 16,
     fontWeight: '600',
+    color: '#fff',
+    flex: 1,
+    marginRight: 8,
+  },
+  price: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#A8E6CF',
+  },
+  description: {
+    fontSize: 13,
+    color: '#aaa',
+    marginBottom: 8,
+  },
+  footerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  time: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  separator: {
+    height: 1,
+    backgroundColor: 'rgba(232, 233, 234, 0.2)',
+    marginLeft: 9,
+    marginRight: 8,
+  
+  },
+  contentContainer: {
+    flex: 1,
+    backgroundColor: '#2E2E30',
+  },
+  sheetContent: {
+    padding: 24,
+    flex: 1,
+  },
+  sheetImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    marginBottom: 16,
+    backgroundColor: '#333',
+  },
+  sheetTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    textAlign: 'left',
     color: '#F8F9FA',
   },
-  galleryContainer: {
-    height: 200,
-    width: '100%',
-    backgroundColor: 'rgba(0,0,0,0.1)',
+  sheetSubtitle: {
+    fontSize: 16,
+    color: '#ccc',
+    marginBottom: 8,
+    textAlign: 'left',
   },
-  galleryImage: {
-    height: 200,
-    resizeMode: 'cover',
+  sheetPrice: {
+    fontSize: 20,
+    color: '#A8E6CF',
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  sheetDuration: {
+    fontSize: 14,
+    color: '#ccc',
+    marginBottom: 16,
+  },
+  sheetDivider: {
+    height: 1,
+    width: '100%',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    marginVertical: 16,
+  },
+  sheetDescription: {
+    fontSize: 16,
+    color: '#ddd',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  sheetButton: {
+    width: '100%',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 'auto',
+    marginBottom: 20,
+  },
+  sheetButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  colaboradorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#3A3A3C',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 24,
+    borderWidth: 1,
+  },
+  colaboradorItem: {
+    marginBottom: 20,
+    backgroundColor: '#2E2E30',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+    paddingBottom: 16,
+  },
+  colaboradorRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  colaboradorAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 16,
+    backgroundColor: '#555',
+  },
+  colaboradorInfo: {
+    flex: 1,
+  },
+  colaboradorName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  colaboradorRole: {
+    fontSize: 12,
+    color: '#aaa',
+  },
+  arrowContainer: {
+    marginLeft: 8,
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#888',
+    marginBottom: 16,
+    textTransform: 'uppercase',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    marginTop: 8,
+    gap: 10,
+    
+  },
+  portfolioButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 32,
+    borderWidth: 1,
+    borderColor: '#666',
+  },
+  portfolioText: {
+    fontSize: 12,
+    color: '#ccc',
+  },
+  scheduleButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 32,
+  },
+  scheduleText: {
+    fontSize: 12,
+    color: '#252525',
+    fontWeight: 'bold',
   },
 });
