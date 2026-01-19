@@ -21,6 +21,7 @@ const darkenColor = (hex: string, factor: number = 0.2) => {
 };
 
 export default function RegisterScreen() {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -28,15 +29,17 @@ export default function RegisterScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const theme = colorScheme ?? 'light';
-  const themeProfundo = '#444';
+  const themeProfundo = '#3d0b37';
+  const themePastel = '#e1bee7';
+  const themeVivido = '#4a148c';
 
   // Cores fixas para o tema dark/glass
-  const textColor = '#FFFFFF';
+  const textColor = '#e8e9ea';
   const borderColor = 'rgba(255,255,255,0.2)';
   const placeholderColor = '#888888';
 
   const handleRegister = async () => {
-    if (!email || !password || !confirmPassword) {
+    if (!name || !email || !password || !confirmPassword) {
       Alert.alert('Erro', 'Por favor, preencha todos os campos.');
       return;
     }
@@ -58,6 +61,7 @@ export default function RegisterScreen() {
         
         // Endpoint de registro (ajuste conforme sua API, ex: 'register' ou 'signup')
         const response = await api.post('register', {
+            name,
             email,
             password,
             password_confirmation: confirmPassword,
@@ -87,15 +91,27 @@ export default function RegisterScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.card}>
+      <View style={[styles.card, { shadowColor: themeVivido }]}>
         <View style={[styles.cardInner, { backgroundColor: 'transparent' }]}>
           <View style={styles.glassBackground} pointerEvents="none">
-            <BlurView intensity={Platform.OS === 'android' ? 50 : 40} tint="dark" style={StyleSheet.absoluteFill} />
+            <BlurView intensity={Platform.OS === 'android' ? 80 : 50} tint="dark" style={StyleSheet.absoluteFill} />
             <View style={[StyleSheet.absoluteFill, { backgroundColor: darkenColor(themeProfundo, 0.3) + '88' }]} />
           </View>
 
           <View style={styles.cardContent}>
             <ThemedText type="title" style={styles.title}>Crie sua conta</ThemedText>
+
+            <View style={styles.inputContainer}>
+              <ThemedText style={styles.label}>Nome</ThemedText>
+              <TextInput
+                style={[styles.input, { color: textColor, borderColor: borderColor }]}
+                placeholder="Seu nome completo"
+                placeholderTextColor={placeholderColor}
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="words"
+              />
+            </View>
 
             <View style={styles.inputContainer}>
               <ThemedText style={styles.label}>Email</ThemedText>
@@ -135,7 +151,7 @@ export default function RegisterScreen() {
             </View>
 
             <TouchableOpacity
-              style={[styles.button, { backgroundColor: Colors[theme].tint }]}
+              style={[styles.button, { backgroundColor: themePastel }]}
               onPress={handleRegister}
               disabled={loading}
             >
@@ -150,7 +166,7 @@ export default function RegisterScreen() {
               style={styles.secondaryButton}
               onPress={() => router.back()}
             >
-              <ThemedText type="link">Já tem uma conta? Faça login</ThemedText>
+              <ThemedText type="link" style={{ color: themePastel }}>Já tem uma conta? Faça login</ThemedText>
             </TouchableOpacity>
           </View>
         </View>
@@ -161,12 +177,12 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: '#252525' },
-  title: { textAlign: 'center', marginBottom: 40, color: '#fff' },
+  title: { textAlign: 'center', marginBottom: 40, color: '#e8e9ea' },
   inputContainer: { marginBottom: 20 },
   label: { marginBottom: 8, fontWeight: '600', color: '#ccc' },
   input: { height: 50, borderWidth: 1, borderRadius: 8, paddingHorizontal: 15, fontSize: 16, backgroundColor: 'rgba(0,0,0,0.2)' },
-  button: { height: 50, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginTop: 10 },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  button: { height: 50, borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginTop: 10 },
+  buttonText: { color: '#252525', fontSize: 16, fontWeight: 'bold' },
   secondaryButton: { marginTop: 20, alignItems: 'center' },
   card: {
     borderRadius: 16,

@@ -27,10 +27,12 @@ export default function LoginScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const theme = colorScheme ?? 'light';
-  const themeProfundo = '#444';
+  const themeProfundo = '#3d0b37';
+  const themePastel = '#e1bee7';
+  const themeVivido = '#4a148c';
 
   // Cores fixas para o tema dark/glass
-  const textColor = '#FFFFFF';
+  const textColor = '#e8e9ea';
   const borderColor = 'rgba(255,255,255,0.2)';
   const placeholderColor = '#888888';
 
@@ -77,10 +79,10 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.card}>
+      <View style={[styles.card, { shadowColor: themeVivido }]}>
         <View style={[styles.cardInner, { backgroundColor: 'transparent' }]}>
           <View style={styles.glassBackground} pointerEvents="none">
-            <BlurView intensity={Platform.OS === 'android' ? 50 : 40} tint="dark" style={StyleSheet.absoluteFill} />
+            <BlurView intensity={Platform.OS === 'android' ? 80 : 50} tint="dark" style={StyleSheet.absoluteFill} />
             <View style={[StyleSheet.absoluteFill, { backgroundColor: darkenColor(themeProfundo, 0.3) + '88' }]} />
           </View>
 
@@ -113,7 +115,7 @@ export default function LoginScreen() {
             </View>
 
             <TouchableOpacity
-              style={[styles.button, { backgroundColor: Colors[theme].tint }]}
+              style={[styles.button, { backgroundColor: themePastel }]}
               onPress={handleLogin}
               disabled={loading}
             >
@@ -128,14 +130,14 @@ export default function LoginScreen() {
               style={styles.secondaryButton}
               onPress={() => router.push('/register')}
             >
-              <ThemedText type="link">Não tem uma conta? Cadastre-se</ThemedText>
+              <ThemedText type="link" style={{ color: themePastel }}>Não tem uma conta? Cadastre-se</ThemedText>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.secondaryButton}
               onPress={() => router.replace('/(tabs)')}
             >
-              <ThemedText type="link">Voltar à página inicial</ThemedText>
+              <ThemedText type="link" style={{ color: themePastel }}>Voltar à página inicial</ThemedText>
             </TouchableOpacity>
           </View>
         </View>
@@ -154,7 +156,7 @@ const styles = StyleSheet.create({
   title: {
     textAlign: 'center',
     marginBottom: 40,
-    color: '#fff',
+    color: '#e8e9ea',
   },
   inputContainer: {
     marginBottom: 20,
@@ -174,19 +176,20 @@ const styles = StyleSheet.create({
   },
   button: {
     height: 50,
-    borderRadius: 8,
+    borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 10,
   },
   buttonText: {
-    color: '#fff',
+    color: '#262626',
     fontSize: 16,
     fontWeight: 'bold',
   },
   secondaryButton: {
     marginTop: 20,
     alignItems: 'center',
+    color: '#4a148c'
   },
   card: {
     borderRadius: 16,

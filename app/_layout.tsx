@@ -42,6 +42,8 @@ export default function RootLayout() {
         <Stack.Screen name="servicos" options={{ headerShown: false }} />
         <Stack.Screen name="agendamento" options={{ headerShown: false }} />
         <Stack.Screen name="resumo" options={{ headerShown: false }} />
+        <Stack.Screen name="endereco" options={{ headerShown: false }} />
+        <Stack.Screen name="edit_profile" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
